@@ -9,8 +9,8 @@ export async function GET(){try {
 export async function PUT(request:Request){try {
  const origin=request.headers.get('origin');if(origin && origin!==new URL(request.url).origin)return Response.json({error:'Invalid origin'},{status:403});
  const body=await request.json() as {state?:{version?:number};revision?:unknown};
- // Older open tabs must reload; never let them strip buildings from saved state.
- if(body?.state?.version!==2)return Response.json({error:'This app has been updated. Reload the page before saving.'},{status:409});
+ // Older open tabs must reload; never let them strip buildings or check-in records from saved state.
+ if(body?.state?.version!==3)return Response.json({error:'This app has been updated. Reload the page before saving.'},{status:409});
  const state=workspaceSchema.parse(body.state);const revision=z.number().int().nonnegative().parse(body.revision);
  const data=JSON.stringify(state);
  const result=revision===0?await db().prepare('INSERT INTO workspace(id,revision,data) VALUES(1,1,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data,revision=workspace.revision+1 WHERE workspace.revision=0').bind(data).run():await db().prepare('UPDATE workspace SET data=?,revision=revision+1 WHERE id=1 AND revision=?').bind(data,revision).run();

@@ -3,11 +3,12 @@ const id = z.string().min(1).max(100);
 const item = z.object({id,label:z.string().trim().min(1).max(200),category:z.string().trim().min(1).max(80)});
 const legacyRoom = z.object({id,name:z.string().trim().min(1).max(100),location:z.string().max(100),masterIds:z.array(id).max(500),custom:z.array(item).max(500),checked:z.array(id).max(1000)});
 const legacyState = z.object({masters:z.array(item).max(500),rooms:z.array(legacyRoom).max(500)});
+export const checkInSchema=z.object({id,name:z.string().trim().min(1).max(100),date:z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(value=>{const d=new Date(value+'T00:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===value;},'Enter a valid date'),time:z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),timeZone:z.string().min(1).max(100),recordedAt:z.string().datetime(),completed:z.number().int().nonnegative(),total:z.number().int().nonnegative()}).refine(c=>c.completed<=c.total,'Invalid checklist counts');
 export const workspaceSchema = z.object({
-  version:z.literal(2),
+  version:z.literal(3),
   masters:z.array(item).max(500),
   buildings:z.array(z.object({id,name:z.string().trim().min(1).max(100),defaultMasterIds:z.array(id).max(500)})).min(1).max(100),
-  rooms:z.array(legacyRoom.extend({buildingId:id})).max(500),
+  rooms:z.array(legacyRoom.extend({buildingId:id,checkIns:z.array(checkInSchema).max(1000)})).max(500),
 }).superRefine((state,ctx)=>{
   const issue=(message:string)=>ctx.addIssue({code:z.ZodIssueCode.custom,message});
   for(const list of [state.buildings,state.rooms,state.masters])if(new Set(list.map(x=>x.id)).size!==list.length)issue('Identifiers must be unique.');
@@ -23,7 +24,11 @@ export type Building=State['buildings'][number];
 export type Item=State['masters'][number];
 // Upgrade legacy data in memory. The next successful revision-checked save persists it.
 export function normalizeWorkspace(value:unknown):State {
-  if(value && typeof value==='object' && 'version' in value)return workspaceSchema.parse(value);
+  if(value && typeof value==='object' && 'version' in value){
+    const versioned=value as {version:unknown;rooms?:unknown};
+    if(versioned.version===2&&Array.isArray(versioned.rooms))return workspaceSchema.parse({...value,version:3,rooms:versioned.rooms.map(r=>({...r,checkIns:[]}))});
+    return workspaceSchema.parse(value);
+  }
   const old=legacyState.parse(value ?? {masters:[],rooms:[]});
-  return workspaceSchema.parse({version:2,masters:old.masters,buildings:[{id:'main-building',name:'Main building',defaultMasterIds:old.masters.map(i=>i.id)}],rooms:old.rooms.map(r=>({...r,buildingId:'main-building'}))});
+  return workspaceSchema.parse({version:3,masters:old.masters,buildings:[{id:'main-building',name:'Main building',defaultMasterIds:old.masters.map(i=>i.id)}],rooms:old.rooms.map(r=>({...r,buildingId:'main-building',checkIns:[]}))});
 }

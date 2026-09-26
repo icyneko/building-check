@@ -3,7 +3,7 @@ import {normalizeWorkspace,workspaceSchema} from '../lib/workspace.ts';
 const old={masters:[{id:'light',label:'Check lights',category:'Safety'}],rooms:[{id:'room-a',name:'Room A',location:'Floor 1',masterIds:['light'],custom:[{id:'desk',label:'Clean desk',category:'Custom'}],checked:['light']}]};
 const state=normalizeWorkspace(old);
 assert.equal(state.buildings[0].name,'Main building');
-assert.deepEqual(state.rooms[0],{...old.rooms[0],buildingId:'main-building'});
+assert.deepEqual(state.rooms[0],{...old.rooms[0],buildingId:'main-building',checkIns:[]});
 assert.deepEqual(normalizeWorkspace(state),state);
 assert.deepEqual(old.rooms[0].checked,['light']);
 const second={id:'north',name:'North building',defaultMasterIds:[]};
