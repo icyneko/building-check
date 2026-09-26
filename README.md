@@ -1,3 +1,17 @@
+# building-check
+This is a prototype for an app to allow people to do security checks in a buildings
+
+## Room Rounds
+
+A room-checking app with multiple buildings, configurable master checklist items, room-specific tasks, room cloning, and named check-in history.
+
+- Each building has its own room list and default checklist configuration.
+- Check-in date and time default to the device's current local date and time.
+- Progress and check-ins are saved in Cloudflare D1.
+- The existing hosted deployment uses the Sites configuration in `.openai/hosting.json`.
+
+## Development and deployment
+
 # vinext-starter
 
 A clean full-stack starter running on [vinext](https://github.com/cloudflare/vinext), with optional Cloudflare D1 and Drizzle support.
