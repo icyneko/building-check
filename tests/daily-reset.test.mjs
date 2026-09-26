@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {normalizeWorkspace,resetForNewDay,dayInZone} from '../lib/workspace.ts';
+const room={id:'r',buildingId:'b',name:'Room',location:'',masterIds:[],custom:[{id:'i',label:'Inspect',category:'General'}],checked:['i'],checkIns:[{id:'c',name:'Alex',date:'2026-09-25',time:'23:00',timeZone:'America/New_York',recordedAt:'2026-09-26T03:00:00Z',completed:1,total:1}]};
+const state=normalizeWorkspace({version:3,masters:[],buildings:[{id:'b',name:'Building',defaultMasterIds:[]}],rooms:[room]},new Date('2026-09-26T03:59:59Z'));
+assert.equal(state.progressDate,'2026-09-25');assert.deepEqual(state.rooms[0].checked,['i']);
+assert.equal(resetForNewDay(state,new Date('2026-09-26T03:59:59Z')),state);
+const next=resetForNewDay(state,new Date('2026-09-26T04:00:00Z'));
+assert.equal(next.progressDate,'2026-09-26');assert.deepEqual(next.rooms[0].checked,[]);assert.deepEqual(next.rooms[0].checkIns,state.rooms[0].checkIns);assert.deepEqual(state.rooms[0].checked,['i']);assert.equal(resetForNewDay(next,new Date('2026-09-26T15:00:00Z')),next);
+assert.equal(dayInZone(new Date('2026-03-08T04:59:59Z')),'2026-03-07');assert.equal(dayInZone(new Date('2026-03-08T05:00:00Z')),'2026-03-08');assert.equal(dayInZone(new Date('2026-11-02T05:00:00Z')),'2026-11-02');
+if(process.argv[2]==='seed'){const {writeFileSync}=await import('node:fs');const yesterday=dayInZone(new Date(Date.now()-86400000));writeFileSync('work/reset-seed.sql',`INSERT INTO workspace(id,revision,data) VALUES(1,1,'${JSON.stringify({...state,progressDate:yesterday}).replaceAll("'","''")}');`);}
+if(process.argv[2]?.startsWith('http')){const url=process.argv[2];const get=async()=>await (await fetch(url)).json();const first=await get();assert.equal(first.state.progressDate,dayInZone());assert.deepEqual(first.state.rooms[0].checked,[]);assert.equal(first.state.rooms[0].checkIns[0].name,'Alex');const old={...state,progressDate:dayInZone(new Date(Date.now()-86400000))};const stale=await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:1,state:old})});assert.equal(stale.status,409);const today=structuredClone(first.state);today.rooms[0].checked=['i'];assert.equal((await fetch(url,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({revision:first.revision,state:today})})).status,200);assert.deepEqual((await get()).state.rooms[0].checked,['i']);}
+console.log('PASS: midnight reset, same-day preservation, DST dates, unchanged history, immutable migration; API checks when URL supplied.');
