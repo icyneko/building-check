@@ -1,6 +1,7 @@
 import {env} from 'cloudflare:workers';
 import {z} from 'zod';
 import {normalizeWorkspace,workspaceSchema,resetForNewDay} from '@/lib/workspace';
+import {authenticate,authJson,isSameOrigin} from '@/lib/google-auth';
 function db(){if(!env.DB)throw Error('Storage unavailable');return env.DB;}
 async function readCurrent(){
  for(let attempt=0;attempt<5;attempt++){
@@ -15,9 +16,13 @@ async function readCurrent(){
  }
  throw Error('Concurrent updates; retry');
 }
-export async function GET(){try{return Response.json(await readCurrent(),{headers:{'Cache-Control':'no-store'}});}catch(e){console.error(e);return Response.json({error:'Unable to load your rooms. Please retry.'},{status:503});}}
+export async function GET(request:Request){
+ if(!await authenticate(request,env.GOOGLE_CLIENT_ID||''))return authJson({error:'Please sign in with Google.'},401);
+ try{return authJson(await readCurrent());}catch(e){console.error(e);return authJson({error:'Unable to load your rooms. Please retry.'},503);}
+}
 export async function PUT(request:Request){try{
- const origin=request.headers.get('origin');if(origin&&origin!==new URL(request.url).origin)return Response.json({error:'Invalid origin'},{status:403});
+ if(!await authenticate(request,env.GOOGLE_CLIENT_ID||''))return authJson({error:'Please sign in with Google.'},401);
+ if(!isSameOrigin(request))return authJson({error:'Invalid origin'},403);
  const body=await request.json() as {state?:{version?:number};revision?:unknown};
  if(body?.state?.version!==4)return Response.json({error:'This app has been updated. Reload the page before saving.'},{status:409});
  const state=workspaceSchema.parse(body.state),revision=z.number().int().nonnegative().parse(body.revision);
@@ -25,5 +30,5 @@ export async function PUT(request:Request){try{
  if(revision!==current.revision||state.progressDate!==current.state.progressDate||state.resetTimeZone!==current.state.resetTimeZone)return Response.json({...current,error:state.progressDate!==current.state.progressDate?'A new day has started. Checkboxes were reset; please try your action again.':'Someone updated this workspace. The latest version has been loaded; please try again.'},{status:409});
  const result=revision===0?await db().prepare('INSERT INTO workspace(id,revision,data) VALUES(1,1,?) ON CONFLICT(id) DO NOTHING').bind(JSON.stringify(state)).run():await db().prepare('UPDATE workspace SET data=?,revision=revision+1 WHERE id=1 AND revision=?').bind(JSON.stringify(state),revision).run();
  if(!result.meta.changes)return Response.json({error:'Someone updated this workspace. Reload the latest version before trying again.'},{status:409});
- return Response.json({state,revision:revision+1});
+ return authJson({state,revision:revision+1});
 }catch(e){if(e instanceof z.ZodError||e instanceof SyntaxError)return Response.json({error:'Please check the entered values.'},{status:400});console.error(e);return Response.json({error:'Changes could not be saved. Please retry.'},{status:503});}}

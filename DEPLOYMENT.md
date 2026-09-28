@@ -4,7 +4,15 @@
 
 Room Rounds is already deployed at https://room-rounds-checklists.icyneko.chatgpt.site using Sites hosting, a Cloudflare Worker, and a D1 database. It does not depend on a computer running a local preview. Open the HTTPS URL in a modern phone or tablet browser; no app-store installation is needed.
 
-The deployment currently restricts access to the owner. Use the site's sharing/access settings to invite people. The app does not currently separate administrator and checker permissions: anyone granted app access can use the configuration controls. Making it public would expose those controls and named check-in records to visitors.
+The Sites audience is public so visitors can reach the Google sign-in screen without a ChatGPT account. The app requires a verified Google session before reading or writing the shared workspace. Any Google user can access the same buildings, check-in history, and configuration controls; there are no separate administrator/checker roles. Do not deploy an older version without Google authentication to this public audience.
+
+## Google sign-in
+
+Set `GOOGLE_CLIENT_ID` in Sites runtime environment variables, then deploy. Locally, copy `.env.example` to `.env.local` and use your web client ID. This ID is public; no Google client secret is required for the Google Identity Services button flow.
+
+In Google Auth Platform, configure an External audience and a Web application client. Add `https://room-rounds-checklists.icyneko.chatgpt.site` as an Authorized JavaScript origin. For local sign-in testing, also add `http://localhost` and `http://localhost:5173`. The JavaScript callback flow does not use a redirect URI. Check the Audience page for any testing-mode restrictions and complete Google's publishing requirements before distributing the app to everyone.
+
+Google signs the profile token; the server verifies its signature, issuer, audience, expiry, verified email, and login nonce. The session cookie is HttpOnly, host-only and Secure on HTTPS; it expires with Google's ID token (typically about one hour). Visitors then sign in again. Sign-out clears the browser cookie. The app does not request access to Google Drive, Gmail or other Google data. The name field defaults to the verified profile name (email if unavailable), remains editable, and is reset to the new profile when switching accounts. Logged names remain user-entered labels, not immutable identity records.
 
 ## Publish changes to this existing Site
 
@@ -22,7 +30,7 @@ Run `npm run dev` for the development preview. Generate database migrations with
 
 ## Hosting elsewhere
 
-The app needs a server and persistent D1 storage; GitHub Pages or other static-only hosting is insufficient. Moving to another Cloudflare account requires a real Worker/D1 configuration, migration of existing data, and replacement access controls. Sites sign-in/access restrictions do not automatically transfer to a different host.
+The app needs a server and persistent D1 storage; GitHub Pages or other static-only hosting is insufficient. Moving to another Cloudflare account requires a real Worker/D1 configuration, migration of existing data, and the same Google client configuration with the new origin registered. Keep the server authentication checks enabled.
 
 ## Mobile behavior
 
